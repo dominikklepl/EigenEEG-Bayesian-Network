@@ -1,0 +1,142 @@
+---
+title: "Merge data"
+author: "Dominik Klepl"
+date: "4/20/2020"
+output: html_document
+---
+```{r}
+PATH = "data/"
+
+#list data
+files_raw = list.files(PATH, pattern = "cnt\\.txt$",full.names = T)
+files_labs = list.files(PATH, pattern = "mrk\\.txt$",full.names = T)
+files_info = list.files(PATH, pattern = "nfo\\.txt$",full.names = T)
+
+i = 1
+```
+
+
+Read raw data
+```{r}
+data = read.delim(files_raw[i], header=FALSE)
+```
+
+Read labels and parse info
+```{r}
+labs = read.delim(files_labs[i],header=F)
+colnames(labs) = c("Pos","Class")
+
+info = as.character(read.table(files_info[i], sep = "\n")[,1])
+
+#get class names
+classes = strsplit(info[2]," ")
+class1 = gsub(",","",classes[[1]][2])
+class2 = classes[[1]][3]
+
+#get channel names
+channels = info[3]
+channels = strsplit(channels, ":")[[1]][2]
+channels = strsplit(channels, ",")[[1]]
+channels = gsub(" ", "",channels)
+
+colnames(data) = channels
+```
+
+Create continous class labels
+```{r}
+x = rep(0,nrow(data))
+labs_full = data.frame(x = x, y = x, trial = rep(NA,nrow(data)))
+colnames(labs_full)[1:2] = c(class1,class2)
+
+#fill the labels
+cue_len = 3999 #activity for 4s (-1 including cue onset)
+for (r in 1:nrow(labs)) {
+  row  = labs[r,]
+  if (row$Class==1) {
+    labs_full[row$Pos:(row$Pos+cue_len),1] = 1
+  } else {
+    labs_full[row$Pos:(row$Pos+cue_len),2] = 1
+  }
+  labs_full[row$Pos:(row$Pos+cue_len),3] = r
+}
+
+#create rest labels
+labs_full$rest = ifelse((labs_full[,1]+labs_full[,2])==0, 1, 0)
+```
+
+Remove samples where the participant is inactive
+```{r}
+labs_active = labs_full[labs_full$rest==0,1:3]
+data_active = data[labs_full$rest==0,]
+```
+
+Convert to microVolts from INT16
+```{r}
+#to mV
+data_active = as.data.frame(sapply(data_active, function(x) 0.1*as.double(x)))
+```
+
+Concanate EEG signals and labels
+```{r}
+final_data = cbind(data_active, labs_active)
+```
+
+
+## Code Assemble
+```{r}
+subjects = c("a","b","c","d","e","f","g")
+
+for (i in 1:length(files_raw)) {
+  cat("Processing participant", i)
+  
+  data = read.delim(files_raw[i], header=FALSE)
+  
+  labs = read.delim(files_labs[i],header=F)
+  colnames(labs) = c("Pos","Class")
+  
+  info = as.character(read.table(files_info[i], sep = "\n")[,1])
+  
+  #get class names
+  classes = strsplit(info[2]," ")
+  class1 = gsub(",","",classes[[1]][2])
+  class2 = classes[[1]][3]
+  
+  #get channel names
+  channels = info[3]
+  channels = strsplit(channels, ":")[[1]][2]
+  channels = strsplit(channels, ",")[[1]]
+  channels = gsub(" ", "",channels)
+  
+  colnames(data) = channels
+  
+  x = rep(0,nrow(data))
+  labs_full = data.frame(x = x, y = x, trial = rep(NA,nrow(data)))
+  colnames(labs_full)[1:2] = c(class1,class2)
+  
+  #fill the labels
+  cue_len = 3999 #activity for 4s (-1 including cue onset)
+  for (r in 1:nrow(labs)) {
+    row  = labs[r,]
+    if (row$Class==1) {
+      labs_full[row$Pos:(row$Pos+cue_len),1] = 1
+    } else {
+      labs_full[row$Pos:(row$Pos+cue_len),2] = 1
+    }
+    labs_full[row$Pos:(row$Pos+cue_len),3] = r
+  }
+  
+  #create rest labels
+  labs_full$rest = ifelse((labs_full[,1]+labs_full[,2])==0, 1, 0)
+  
+  labs_active = labs_full[labs_full$rest==0,1:3]
+  data_active = data[labs_full$rest==0,]
+  
+  data_active = as.data.frame(sapply(data_active, function(x) 0.1*as.double(x)))
+  
+  final_data = cbind(data_active, labs_active)
+  
+  filename = paste0("data_clean/Subject_", subjects[i], ".csv")
+  write.csv(final_data, filename)
+}
+```
+
