@@ -5,6 +5,7 @@ date: "4/20/2020"
 output: html_document
 ---
 ```{r}
+library(readr)
 PATH = "data/"
 
 #list data
@@ -87,7 +88,7 @@ final_data = cbind(data_active, labs_active)
 subjects = c("a","b","c","d","e","f","g")
 
 for (i in 1:length(files_raw)) {
-  cat("Processing participant", i)
+  cat("\nProcessing participant", i)
   
   data = read.delim(files_raw[i], header=FALSE)
   
@@ -135,8 +136,84 @@ for (i in 1:length(files_raw)) {
   
   final_data = cbind(data_active, labs_active)
   
-  filename = paste0("data_clean/Subject_", subjects[i], ".csv")
-  write.csv(final_data, filename)
+  filename = paste0("data_clean/Subject_", subjects[i], "_train.csv")
+  write_csv(final_data, filename)
+}
+```
+
+## Prepare testing data
+```{r}
+PATH = "testing/"
+files_raw = list.files(PATH, pattern = "cnt\\.txt$",full.names = T)
+files_labs = list.files(PATH, pattern = "y\\.txt$",full.names = T)
+files_info = list.files(PATH, pattern = "nfo\\.txt$",full.names = T)
+
+subjects = c("a","b","c","d","e","f","g")
+
+for (i in 1:length(files_raw)) {
+  cat("\nProcessing participant", i)
+  
+  data = read.delim(files_raw[i], header=FALSE)
+  
+  labs = read.delim(files_labs[i],header=F)
+  colnames(labs) = c("Class")
+  labs$Class = ifelse(is.na(labs$Class),0,labs$Class)
+  
+  info = as.character(read.table(files_info[i], sep = "\n")[,1])
+  
+  #get class names
+  classes = strsplit(info[2]," ")
+  class1 = gsub(",","",classes[[1]][2])
+  class2 = classes[[1]][3]
+  
+  #get channel names
+  channels = info[3]
+  channels = strsplit(channels, ":")[[1]][2]
+  channels = strsplit(channels, ",")[[1]]
+  channels = gsub(" ", "",channels)
+  
+  colnames(data) = channels
+  
+  if (nrow(labs)>nrow(data)){
+    labs = data.frame(Class=labs[1:nrow(data),])
+  }
+  
+  labs_full = labs
+  rm(labs)
+  
+  labs_full[,class1] = ifelse(labs_full$Class==1,1,0)
+  labs_full[,class2] = ifelse(labs_full$Class==-1,1,0)
+  labs_full[,"rest"] = ifelse(labs_full$Class==0,1,0)
+  labs_full = labs_full[,-1]
+  
+  labs_active = labs_full[labs_full$rest==0,1:2]
+  data_active = data[labs_full$rest==0,]
+  
+  data_active = as.data.frame(sapply(data_active, function(x) 0.1*as.double(x)))
+  
+  final_data = cbind(data_active, labs_active)
+  
+  filename = paste0("data_clean/Subject_", subjects[i], "_test.csv")
+  write_csv(final_data, filename)
+}
+```
+
+```{r}
+fn = list.files("data_clean",full.names = T)
+
+for (i in 1:length(fn)){
+  d = read_csv(fn[1])
+  
+  if (ncol(d)==62){
+    colnames(d)[62]
+    d = d[,-62]
+  }
+
+  colnames(d)[17:24] = c("FTT7h","FCC5h","FCC3h","FCC1h","FCC2h","FCC4h","FCC6h","FTT8h")
+  colnames(d)[34:41] = c("TTP7h","CCP5h","CCP3h","CCP1h","CCP2h","CCP4h","CCP6h","TTP8h")
+
+  write_csv(d,fn[i])
+  
 }
 ```
 
