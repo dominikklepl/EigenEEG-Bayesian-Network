@@ -1,0 +1,48 @@
+---
+title: "01b Resample"
+author: "Dominik Klepl"
+date: "4/21/2020"
+output: html_document
+---
+
+```{r}
+library(eegkit)
+library(readr)
+```
+
+### Downsample the signals from 1000Hz to 200Hz
+```{r}
+#list files in the data folder
+files = list.files("final_data")
+```
+
+Try on one file
+```{r}
+#load sample data
+testing = F
+
+if (testing) {
+  i=1
+  fn = paste0("final_data/",files[i])
+  data = read_csv(fn)
+  resampled = as.data.frame(eegresample(data, nrow(data)*0.2)) #from 1000 to 200
+  
+  save_path = paste0("data_200/",files[i])
+  write_csv(resampled,save_path)
+}
+```
+
+## Repeat for all
+```{r}
+for (i in 1:length(files)) {
+  fn = paste0("final_data/",files[i])
+  data = read_csv(fn)
+  
+  resampled = as.data.frame(eegresample(data, nrow(data)*0.2)) #from 1000 to 200
+  
+  save_path = paste0("data_200/",files[i])
+  write_csv(resampled,save_path)
+  cat("\n",i,"out of",length(files))
+}
+```
+
