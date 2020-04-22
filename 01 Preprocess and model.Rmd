@@ -1,0 +1,126 @@
+---
+title: "01 Preprocess and model"
+author: "Dominik Klepl"
+date: "4/22/2020"
+output: html_document
+---
+
+```{r}
+library(readr)
+library(eegkit)
+library(ggplot2)
+library(ggthemes)
+```
+
+```{r}
+files = list.files("data/merged", full.names = T)
+```
+
+## Try on sample + visualize
+```{r}
+df = read_csv(files[1])
+```
+
+Transform to mV
+```{r}
+df[,1:32] = lapply(df[,1:32], function(x) 1e-6*x)
+```
+
+Plot EEG cap
+```{r}
+#eegcap(electrodes = colnames(df)[-1], type="3d")
+png("figures/eeg_cap.png",res=125)
+eegcap(electrodes = colnames(df)[1:32], type="2d")
+dev.off()
+```
+
+## Filter
+```{r}
+sampling = 500
+filtered = df
+filtered[,1:32]= eegfilter(df[,1:32], sampling, lower = 7, upper = 30, method = "butter", order = 5, forwardreverse = F)
+```
+
+
+Visualize effect of filter
+```{r}
+filter_effect = data.frame(Raw = df$Cz,
+                           Filter = filtered$Cz,
+                           time = 1:nrow(df))
+filter_effect = filter_effect[1:(sampling*60),]
+filter_effect = tidyr::gather(filter_effect,Signal,mV,Raw:Filter)
+
+(f_e_plot = ggplot(filter_effect,aes(time,mV,color=Signal))+
+  geom_line()+
+  facet_wrap(~Signal)+
+  theme_few()+
+  scale_color_tableau())
+ggsave("figures/Raw_filtered.png",f_e_plot,width=7,height=4)
+rm(f_e_plot)
+rm(filter_effect)
+```
+
+### Normalize
+```{r}
+filtered[,1:32] = lapply(filtered[,1:32], function(x) scale(x))
+
+#sanity check - mean should be 0 and SD 1
+mean(filtered$Fp1)
+sd(filtered$Fp1)
+```
+
+### Linear models
+
+Fit a model for each class
+```{r}
+EEG_cols = c(1:32,40)
+lab_cols = 33:39
+for (i in 1:length(lab_cols)) {
+  df_rest = df[,c(EEG_cols,lab_cols[i])]
+  colnames(df_rest)[34]="Response"
+  df_rest$Response = as.factor(df_rest$Response)
+  
+  df_rest = downSample(x=df_rest[,1:33],y=df_rest$Response, yname = "Response")
+  
+  train = df_rest[df_rest$Series<=6,]
+  test = df_rest[df_rest$Series>6,]
+  
+  train = train[,-33]
+  test = test[,-33]
+  
+  m1 = glm(Response ~ ., family = "binomial", data=train)
+  summary(m1)
+  
+  preds = predict(m1, newdata = test, type = "response")
+  #preds = ifelse(preds>0.5,1,0)
+  auc = AUC(preds,test$Response)
+  cat("\n",colnames(df)[lab_cols[i]],":",auc)
+}
+
+```
+A baseline model gives 0.66 AUC.
+
+```{r}
+cor = round(cor(df[,1:32]),2)
+
+cor.mtest = function(mat, ...) {
+    mat = as.matrix(mat)
+    n = ncol(mat)
+    p.mat = matrix(NA, n, n)
+    diag(p.mat) = 0
+    for (i in 1:(n - 1)) {
+        for (j in (i + 1):n) {
+            tmp = cor.test(mat[, i], mat[, j], ...)
+            p.mat[i, j] = p.mat[j, i] <- tmp$p.value
+        }
+    }
+  colnames(p.mat) = rownames(p.mat) = colnames(mat)
+  p.mat
+}
+
+# matrix of the p-value of the correlation
+p_vals = cor.mtest(df[,1:32])
+
+corrplot::corrplot(cor,"color",tl.col="black", tl.cex = 0.75, p.mat = p_vals,sig.level = 0.001,addCoef.col = "black",number.cex = 0.5)
+```
+

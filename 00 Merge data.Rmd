@@ -1,0 +1,77 @@
+---
+title: "Merge data"
+author: "Dominik Klepl"
+date: "4/22/2020"
+output: html_document
+---
+
+```{r}
+library(readr)
+library(eegkit)
+library(ggplot2)
+library(ggthemes)
+
+
+files_data = list.files("data/train", full.names = T, pattern = "data")
+files_events = list.files("data/train", full.names = T, pattern = "event")
+sampling = 500
+```
+
+```{r}
+df = read.csv(files_data[1])[,-1]
+events = read.csv(files_events[1])
+
+#covnert to microVolts
+df[] = lapply(df, function(x) 1e-6*x)
+
+events$Rest = rowSums(events[,2:7])
+events$Rest = ifelse(events$Rest==0,1,0)
+```
+
+## Filter
+```{r}
+#use butterworth 5th order filter between 7 and 30 Hz, only use forward pass so that future data are not used 
+df_filtered = df
+df_filtered[]= eegfilter(df, sampling, lower = 7, upper = 30, method = "butter", order = 5, forwardreverse = F)
+```
+
+## Merge Series and events
+```{r}
+files_data = list.files("data/train", full.names = T, pattern = "data")
+files_events = list.files("data/train", full.names = T, pattern = "event")
+sampling = 500
+
+subjects = 1:12
+series = 1:8
+
+for (s in subjects) {
+  cat("\nSubject",s)
+  pattern = paste0("subj",s,"_")
+  subj_data = files_data[grep(pattern,files_data)]
+  subj_event = files_events[grep(pattern,files_events)]
+  all_data = data.frame()
+  
+  for (i in series){
+    cat("\nSeries",i)
+    df = read.csv(subj_data[i])[,-1]
+    events = read.csv(subj_event[i])[-1]
+    
+    #covnert to microVolts
+    #df[] = lapply(df, function(x) 1e-6*x)
+    
+    events$Rest = rowSums(events)
+    events$Rest = ifelse(events$Rest==0,1,0)
+    events$Series = rep(i,nrow(events))
+    
+    #filter
+    #df[]= eegfilter(df, sampling, lower = 7, upper = 30, method = "butter", order = 5, forwardreverse = F)
+    
+    df = cbind(df,events)
+    
+    all_data = rbind(all_data,df)
+  }
+  path = paste0("data/merged/Subject",s,".csv")
+  write_csv(all_data,path)
+}
+```
+
