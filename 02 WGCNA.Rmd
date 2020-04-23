@@ -1,0 +1,197 @@
+---
+title: "02 WGCNA"
+author: "Dominik Klepl"
+date: "4/23/2020"
+output: html_document
+editor_options: 
+  chunk_output_type: inline
+---
+
+```{r setup, include=FALSE}
+library(eegkit)
+library(WGCNA)
+
+#list all data
+files = list.files("data/merged", full.names = T)
+```
+
+Preprocessing function
+```{r}
+preprocess = function(data, sampling = 500, resample = F, new_sampling = 200) {
+  data[,1:32] = lapply(data[,1:32], function(x) 1e-6*x)
+  data[,1:32]= eegfilter(data[,1:32], sampling, lower = 7, upper = 30, method = "butter", order = 5, forwardreverse = F)
+  
+  if (resample){
+    down = sampling/new_sampling
+    data = as.data.frame(eegresample(data,round(nrow(data)/down,0)))
+  }
+  data[,1:32] = lapply(data[,1:32], function(x) scale(x))
+  return(data)
+}
+```
+
+#Load and preprocess one participant
+And downsample to 200 Hz (from 500)
+```{r}
+df = read.csv(files[7])
+df = preprocess(df, resample = T)
+```
+
+#Find soft threshold power for module detection
+```{r}
+# Choose a set of soft-thresholding powers
+powers = c(c(1:10), seq(from = 12, to=20, by=2))
+# Call the network topology analysis function
+sft = pickSoftThreshold(df[,1:32], powerVector = powers, verbose = 5)
+
+sizeGrWindow(9, 5)
+par(mfrow = c(1,2));
+cex1 = 0.9;
+# Scale-free topology fit index as a function of the soft-thresholding power
+plot(sft$fitIndices[,1], -sign(sft$fitIndices[,3])*sft$fitIndices[,2],
+     xlab="Soft Threshold (power)",ylab="Scale Free Topology Model Fit,signed R^2",type="n",
+     main = paste("Scale independence"));
+text(sft$fitIndices[,1], -sign(sft$fitIndices[,3])*sft$fitIndices[,2],
+     labels=powers,cex=cex1,col="red");
+# this line corresponds to using an R^2 cut-off of h
+abline(h=0.80,col="red")
+# Mean connectivity as a function of the soft-thresholding power
+plot(sft$fitIndices[,1], sft$fitIndices[,5],
+     xlab="Soft Threshold (power)",ylab="Mean Connectivity", type="n",
+     main = paste("Mean connectivity"))
+text(sft$fitIndices[,1], sft$fitIndices[,5], labels=powers, cex=cex1,col="red")
+
+#try 10 and 14
+```
+
+# Automatic network construction
+```{r}
+net = blockwiseModules(df[,1:32], power = 10,
+                       TOMType = "unsigned", minModuleSize = 1,
+                       reassignThreshold = 1e-6, mergeCutHeight = 0.22,
+                       numericLabels = TRUE, pamRespectsDendro = FALSE,
+                       saveTOMs = TRUE,
+                       saveTOMFileBase = "Sub1TOM", 
+                       verbose = 3)
+```
+
+Plot modules and dendogram
+```{r}
+# open a graphics window
+sizeGrWindow(12, 9)
+# Convert labels to colors for plotting
+mergedColors = labels2colors(net$colors)
+# Plot the dendrogram and the module colors underneath
+plotDendroAndColors(net$dendrograms[[1]], mergedColors[net$blockGenes[[1]]],
+                    "Module colors",
+                    dendroLabels = F, hang = 0.03,
+                    addGuide = TRUE, guideHang = 0.05)
+
+table(net$colors)
+
+eegcap(electrodes = colnames(df)[1:32], type="2d", col.point = mergedColors)
+```
+
+# Run WGCNA for all subjects
+
+Load all data, remove testing data (series 7 and 8)
+```{r}
+library(dplyr)
+
+```
+
+
+```{r}
+files = list.files("data/merged")
+modules = data.frame(ID = 1:32)
+powers = c(c(1:10), seq(from = 12, to=20, by=2))
+#powers_optim = rep(0,12)
+n = 1
+standard_stats = list()
+for (f in files) {
+  print(f)
+  path_read = paste0("data/merged/",f)
+  df = read.csv(path_read)
+  df = df[df$Series<7,]
+  df = preprocess(df, resample = T)
+  
+  #store parameters for normalization
+  center = unlist(lapply(df[,1:32], function(x) attributes(x)[[2]]))
+  scale = unlist(lapply(df[,1:32], function(x) attributes(x)[[3]]))
+  stats = cbind(center,scale)
+  colnames(stats) = c(
+    paste0("center_",gsub(".csv","",f)),
+    paste0("scale_",gsub(".csv","",f))
+  )
+  standard_stats[[length(standard_stats)+1]] = stats
+  names(standard_stats)[length(standard_stats)] = gsub(".csv","",f)
+  
+  # #chooose power
+  # sft = pickSoftThreshold(df[,1:32], powerVector = powers, verbose = 5)
+  # 
+  # sizeGrWindow(9, 5)
+  # par(mfrow = c(1,2));
+  # cex1 = 0.9;
+  # # Scale-free topology fit index as a function of the soft-thresholding power
+  # plot(sft$fitIndices[,1], -sign(sft$fitIndices[,3])*sft$fitIndices[,2],
+  #      xlab="Soft Threshold (power)",ylab="Scale Free Topology Model Fit,signed R^2",type="n",
+  #      main = paste("Scale independence"));
+  # text(sft$fitIndices[,1], -sign(sft$fitIndices[,3])*sft$fitIndices[,2],
+  #      labels=powers,cex=cex1,col="red");
+  # # this line corresponds to using an R^2 cut-off of h
+  # abline(h=0.80,col="red")
+  # # Mean connectivity as a function of the soft-thresholding power
+  # plot(sft$fitIndices[,1], sft$fitIndices[,5],
+  #      xlab="Soft Threshold (power)",ylab="Mean Connectivity", type="n",
+  #      main = paste("Mean connectivity"))
+  # text(sft$fitIndices[,1], sft$fitIndices[,5], labels=powers, cex=cex1,col="red")
+  # 
+  # P = readline("Choose power: ")
+  # P = as.numeric(P)
+  # powers_optim[n] = P
+  # 
+  # net = blockwiseModules(df[,1:32], power = powers_optim[n],
+  #                      TOMType = "unsigned", minModuleSize = 1,
+  #                      reassignThreshold = 1e-6, mergeCutHeight = 0.15,
+  #                      numericLabels = TRUE, pamRespectsDendro = FALSE,
+  #                      saveTOMs = TRUE,
+  #                      saveTOMFileBase = f,
+  #                      verbose = 3)
+  # path_net = paste0("data/nets/",gsub(".csv","",f),".RData")
+  # save(net, file = path_net)
+  # 
+  # modules[,ncol(modules)+1] = net$colors
+  # colnames(modules)[ncol(modules)] = gsub(".csv","",f)
+  # print(max(unique(net$colors)))
+  # n= n+1
+}
+
+readr::write_csv(modules, "data/modules.csv")
+save(standard_stats, file="data/Standardize.RData")
+```
+
+How many signals remained uncategorized
+```{r}
+for (i in 2:ncol(modules)) {
+  cat("\n",colnames(modules)[i],":",
+      sum(modules[,i]==0),
+      "with", length(unique(modules[,i]))-1,"modules")
+
+}
+
+#remove subjects 1,11,12,6
+```
+
+## Visualisation of modules
+```{r}
+modules_list = t(modules)
+channel_names = colnames(df)[1:32]
+
+for (i in 2:nrow(modules_list)){
+  save_to = paste0("figures/modules_head/",rownames(modules_list)[i],".png")
+  png(save_to,width = 1000, height = 1000)
+  eegcap(electrodes = channel_names, type="2d", col.point = labels2colors(modules_list[i,]), main = "PPPPP", col.label = "white", cex.point = 9, cex.label = 1.5)
+  dev.off()
+}
+```
+

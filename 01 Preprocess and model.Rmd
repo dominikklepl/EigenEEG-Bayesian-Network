@@ -6,10 +6,10 @@ output: html_document
 ---
 
 ```{r}
-library(readr)
 library(eegkit)
 library(ggplot2)
 library(ggthemes)
+library(tidyr)
 ```
 
 ```{r}
@@ -18,7 +18,9 @@ files = list.files("data/merged", full.names = T)
 
 ## Try on sample + visualize
 ```{r}
-df = read_csv(files[1])
+df = read.csv(files[1])
+
+d = preprocess(df, resample = T)
 ```
 
 Transform to mV
@@ -39,6 +41,22 @@ dev.off()
 sampling = 500
 filtered = df
 filtered[,1:32]= eegfilter(df[,1:32], sampling, lower = 7, upper = 30, method = "butter", order = 5, forwardreverse = F)
+```
+
+Put all preprocessing into a function
+```{r}
+preprocess = function(data, sampling = 500, resample = F, new_sampling = 200) {
+  data[,1:32] = lapply(data[,1:32], function(x) 1e-6*x)
+  data[,1:32]= eegfilter(data[,1:32], sampling, lower = 7, upper = 30, method = "butter", order = 5, forwardreverse = F)
+  data[,1:32] = lapply(data[,1:32], function(x) scale(x))
+  
+  if (resample){
+    down = sampling/new_sampling
+    data = as.data.frame(eegresample(data,round(nrow(data)/down,0)))
+  }
+  
+  return(data)
+}
 ```
 
 
@@ -69,6 +87,22 @@ mean(filtered$Fp1)
 sd(filtered$Fp1)
 ```
 
+## Check distribution
+```{r}
+#resample to 100Hz for plotting
+t = as.data.frame(eegresample(filtered[,1:32],round(nrow(filtered)/10,0)))
+t = t %>% gather()
+
+
+ggplot(t, aes(value)) + 
+  geom_density() + 
+  facet_wrap(~key, scales = 'free_x')+
+  theme_few()
+  
+
+t %>% group_by(key) %>% summarise(diff = mean(value) - median(value))
+```
+
 ### Linear models
 
 Fit a model for each class
@@ -80,7 +114,7 @@ for (i in 1:length(lab_cols)) {
   colnames(df_rest)[34]="Response"
   df_rest$Response = as.factor(df_rest$Response)
   
-  df_rest = downSample(x=df_rest[,1:33],y=df_rest$Response, yname = "Response")
+  df_rest = caret::downSample(x=df_rest[,1:33],y=df_rest$Response, yname = "Response")
   
   train = df_rest[df_rest$Series<=6,]
   test = df_rest[df_rest$Series>6,]
@@ -93,10 +127,9 @@ for (i in 1:length(lab_cols)) {
   
   preds = predict(m1, newdata = test, type = "response")
   #preds = ifelse(preds>0.5,1,0)
-  auc = AUC(preds,test$Response)
+  auc = MLmetrics::AUC(preds,test$Response)
   cat("\n",colnames(df)[lab_cols[i]],":",auc)
 }
-
 ```
 A baseline model gives 0.66 AUC.
 
