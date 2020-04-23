@@ -10,6 +10,7 @@ library(eegkit)
 library(ggplot2)
 library(ggthemes)
 library(tidyr)
+library(dplyr)
 ```
 
 ```{r}
@@ -18,9 +19,7 @@ files = list.files("data/merged", full.names = T)
 
 ## Try on sample + visualize
 ```{r}
-df = read.csv(files[1])
-
-d = preprocess(df, resample = T)
+df = read.csv(files[8])
 ```
 
 Transform to mV
@@ -42,23 +41,6 @@ sampling = 500
 filtered = df
 filtered[,1:32]= eegfilter(df[,1:32], sampling, lower = 7, upper = 30, method = "butter", order = 5, forwardreverse = F)
 ```
-
-Put all preprocessing into a function
-```{r}
-preprocess = function(data, sampling = 500, resample = F, new_sampling = 200) {
-  data[,1:32] = lapply(data[,1:32], function(x) 1e-6*x)
-  data[,1:32]= eegfilter(data[,1:32], sampling, lower = 7, upper = 30, method = "butter", order = 5, forwardreverse = F)
-  data[,1:32] = lapply(data[,1:32], function(x) scale(x))
-  
-  if (resample){
-    down = sampling/new_sampling
-    data = as.data.frame(eegresample(data,round(nrow(data)/down,0)))
-  }
-  
-  return(data)
-}
-```
-
 
 Visualize effect of filter
 ```{r}
@@ -85,22 +67,21 @@ filtered[,1:32] = lapply(filtered[,1:32], function(x) scale(x))
 #sanity check - mean should be 0 and SD 1
 mean(filtered$Fp1)
 sd(filtered$Fp1)
+
+#resample to 200 Hz
+filtered = as.data.frame(eegresample(filtered,round(nrow(filtered)/2.5,0)))
+filtered[,33:39] = lapply(filtered[,33:39], function(x) ifelse(x>0.5,1,0))
+filtered$Series = round(filtered$Series,0)
 ```
 
 ## Check distribution
 ```{r}
-#resample to 100Hz for plotting
-t = as.data.frame(eegresample(filtered[,1:32],round(nrow(filtered)/10,0)))
-t = t %>% gather()
-
+t = filtered %>% gather()
 
 ggplot(t, aes(value)) + 
   geom_density() + 
   facet_wrap(~key, scales = 'free_x')+
   theme_few()
-  
-
-t %>% group_by(key) %>% summarise(diff = mean(value) - median(value))
 ```
 
 ### Linear models
@@ -108,9 +89,10 @@ t %>% group_by(key) %>% summarise(diff = mean(value) - median(value))
 Fit a model for each class
 ```{r}
 EEG_cols = c(1:32,40)
-lab_cols = 33:39
+lab_cols = 33:38
+mean_auc = rep(NA,length(lab_cols))
 for (i in 1:length(lab_cols)) {
-  df_rest = df[,c(EEG_cols,lab_cols[i])]
+  df_rest = filtered[,c(EEG_cols,lab_cols[i])]
   colnames(df_rest)[34]="Response"
   df_rest$Response = as.factor(df_rest$Response)
   
@@ -128,8 +110,11 @@ for (i in 1:length(lab_cols)) {
   preds = predict(m1, newdata = test, type = "response")
   #preds = ifelse(preds>0.5,1,0)
   auc = MLmetrics::AUC(preds,test$Response)
+  mean_auc[i] = auc
   cat("\n",colnames(df)[lab_cols[i]],":",auc)
 }
+
+mean(mean_auc)
 ```
 A baseline model gives 0.66 AUC.
 
@@ -155,5 +140,67 @@ cor.mtest = function(mat, ...) {
 p_vals = cor.mtest(df[,1:32])
 
 corrplot::corrplot(cor,"color",tl.col="black", tl.cex = 0.75, p.mat = p_vals,sig.level = 0.001,addCoef.col = "black",number.cex = 0.5)
+```
+
+Put all preprocessing into a function
+```{r}
+preprocess = function(data, sampling = 500, resample = F, new_sampling = 200) {
+  data[,1:32] = lapply(data[,1:32], function(x) 1e-6*x)
+  #data[,1:32]= eegfilter(data[,1:32], sampling, lower = 5, upper = 30, method = "butter", order = 5, forwardreverse = F)
+  if (resample){
+    down = sampling/new_sampling
+    data = as.data.frame(eegresample(data,round(nrow(data)/down,0)))
+    data[,33:39] = lapply(data[,33:39], function(x) ifelse(x>0.5,1,0))
+    data$Series = round(data$Series,0)
+  }
+  data[,1:32] = lapply(data[,1:32], function(x) scale(x))
+  return(data)
+}
+```
+
+## Run Linear models for all subjects
+```{r}
+files = list.files("data/merged", full.names = T)
+
+EEG_cols = c(1:32,40)
+lab_cols = 33:38
+n=1
+AUCs = rep(NA,length(files))
+for (f in files) {
+  df = read.csv(f)
+  df = preprocess(df)
+  
+  mean_auc = rep(NA,length(lab_cols))
+  for (i in 1:length(lab_cols)) {
+    df_rest = df[,c(EEG_cols,lab_cols[i])]
+    colnames(df_rest)[34]="Response"
+    df_rest$Response = as.factor(df_rest$Response)
+    
+    df_rest = caret::downSample(x=df_rest[,1:33],y=df_rest$Response, yname = "Response")
+    
+    train = df_rest[df_rest$Series<=6,]
+    test = df_rest[df_rest$Series>6,]
+    
+    train = train[,-33]
+    test = test[,-33]
+    
+    m1 = glm(Response ~ ., family = "binomial", data=train)
+    summary(m1)
+    
+    preds = predict(m1, newdata = test, type = "response")
+    auc = MLmetrics::AUC(preds,test$Response)
+    mean_auc[i] = auc
+    cat("\n",colnames(df)[lab_cols[i]],":",auc)
+  }
+  
+  m = mean(mean_auc)
+  AUCs[n] = m
+  n = n + 1
+}
+
+AUC_overall = data.frame(ID = 1:length(files),
+                         AUC = AUCs)
+
+readr::write_csv(AUC_overall,"results/Baseline_results.csv")
 ```
 

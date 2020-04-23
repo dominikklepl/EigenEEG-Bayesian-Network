@@ -31,10 +31,9 @@ preprocess = function(data, sampling = 500, resample = F, new_sampling = 200) {
 ```
 
 #Load and preprocess one participant
-And downsample to 200 Hz (from 500)
 ```{r}
 df = read.csv(files[7])
-df = preprocess(df, resample = T)
+df = preprocess(df)
 ```
 
 #Find soft threshold power for module detection
@@ -95,17 +94,12 @@ eegcap(electrodes = colnames(df)[1:32], type="2d", col.point = mergedColors)
 # Run WGCNA for all subjects
 
 Load all data, remove testing data (series 7 and 8)
-```{r}
-library(dplyr)
-
-```
-
 
 ```{r}
 files = list.files("data/merged")
 modules = data.frame(ID = 1:32)
 powers = c(c(1:10), seq(from = 12, to=20, by=2))
-#powers_optim = rep(0,12)
+powers_optim = rep(0,12)
 n = 1
 standard_stats = list()
 for (f in files) {
@@ -113,7 +107,7 @@ for (f in files) {
   path_read = paste0("data/merged/",f)
   df = read.csv(path_read)
   df = df[df$Series<7,]
-  df = preprocess(df, resample = T)
+  df = preprocess(df)
   
   #store parameters for normalization
   center = unlist(lapply(df[,1:32], function(x) attributes(x)[[2]]))
@@ -126,7 +120,7 @@ for (f in files) {
   standard_stats[[length(standard_stats)+1]] = stats
   names(standard_stats)[length(standard_stats)] = gsub(".csv","",f)
   
-  # #chooose power
+  #chooose power
   # sft = pickSoftThreshold(df[,1:32], powerVector = powers, verbose = 5)
   # 
   # sizeGrWindow(9, 5)
@@ -149,25 +143,27 @@ for (f in files) {
   # P = readline("Choose power: ")
   # P = as.numeric(P)
   # powers_optim[n] = P
-  # 
-  # net = blockwiseModules(df[,1:32], power = powers_optim[n],
-  #                      TOMType = "unsigned", minModuleSize = 1,
-  #                      reassignThreshold = 1e-6, mergeCutHeight = 0.15,
-  #                      numericLabels = TRUE, pamRespectsDendro = FALSE,
-  #                      saveTOMs = TRUE,
-  #                      saveTOMFileBase = f,
-  #                      verbose = 3)
-  # path_net = paste0("data/nets/",gsub(".csv","",f),".RData")
-  # save(net, file = path_net)
-  # 
-  # modules[,ncol(modules)+1] = net$colors
-  # colnames(modules)[ncol(modules)] = gsub(".csv","",f)
-  # print(max(unique(net$colors)))
-  # n= n+1
+  # print(powers_optim)
+  
+  net = blockwiseModules(df[,1:32], power = powers_optim[n],
+                       TOMType = "unsigned", minModuleSize = 1,
+                       reassignThreshold = 1e-6, mergeCutHeight = 0.15,
+                       numericLabels = TRUE, pamRespectsDendro = FALSE,
+                       saveTOMs = TRUE,
+                       saveTOMFileBase = f,
+                       verbose = 3)
+  path_net = paste0("data/nets/",gsub(".csv","",f),".RData")
+  save(net, file = path_net)
+
+  modules[,ncol(modules)+1] = net$colors
+  colnames(modules)[ncol(modules)] = gsub(".csv","",f)
+  print(max(unique(net$colors)))
+  n = n+1
 }
 
+#save(powers_optim, file="data/optimal_thresholds.RData")
 readr::write_csv(modules, "data/modules.csv")
-save(standard_stats, file="data/Standardize.RData")
+#save(standard_stats, file="data/Standardize.RData")
 ```
 
 How many signals remained uncategorized
