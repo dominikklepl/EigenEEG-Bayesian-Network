@@ -1,0 +1,197 @@
+---
+title: "03 Module signal extraction"
+author: "Dominik Klepl"
+date: "4/23/2020"
+output: html_document
+---
+
+```{r}
+library(WGCNA)
+
+files = list.files("data/merged", full.names = T)
+
+#remove subjects 1,11,12,6   - 1,3,4,9
+files = files[c(-1,-3,-4,-9)]
+```
+
+Load sample
+```{r}
+f = files[11]
+df = read.csv(f)
+```
+
+Preprocess
+```{r}
+preprocess = function(data, sampling = 500, resample = F, new_sampling = 200) {
+  data[,1:32] = lapply(data[,1:32], function(x) 1e-6*x)
+  #data[,1:32]= eegkit::eegfilter(data[,1:32], sampling, lower = 5, upper = 30, method = "butter", order = 5, forwardreverse = F)
+  if (resample){
+    down = sampling/new_sampling
+    data = as.data.frame(eegresample(data,round(nrow(data)/down,0)))
+    data[,33:39] = lapply(data[,33:39], function(x) ifelse(x>0.5,1,0))
+    data$Series = round(data$Series,0)
+  }
+  data[,1:32] = lapply(data[,1:32], function(x) scale(x))
+  return(data)
+}
+```
+
+```{r}
+df_p = preprocess(df)
+
+EEG = df_p[,1:32]
+labs = df_p[,33:40]
+```
+
+
+Load module assignments
+```{r}
+modules = read.csv("data/modules.csv")[,-1]
+rownames(modules) = colnames(EEG)
+```
+
+Compute the signal for each module
+```{r}
+#grab the module assignment for the subject
+sub_name = gsub(".csv","",strsplit(f,"/")[[1]][3])
+
+modules_sub = modules[,sub_name]
+signals_all = moduleEigengenes(EEG, modules_sub, excludeGrey = T)
+
+module_signals = signals_all$eigengenes
+
+rowMeans(signals_all$varExplained)
+
+#get signals that were not assigned to any module (we'll keep them as well)
+no_module = EEG[,modules_sub==0]
+
+df_reduced = cbind(module_signals,no_module,labs)
+
+save_to = paste0("data/reduced/",sub_name,".RData")
+save(df_reduced, file = save_to)
+```
+
+## Repeat for all
+```{r}
+modules = read.csv("data/modules.csv")[,-1]
+
+variances = rep(NA,length(files))
+n = 1
+for (f in files) {
+  df = read.csv(f)
+  df = preprocess(df)
+  EEG = df[,1:32]
+  labs = df[,33:40]
+  rm(df)
+  
+  sub_name = gsub(".csv","",strsplit(f,"/")[[1]][3])
+  print(sub_name)
+
+  modules_sub = modules[,sub_name]
+  signals_all = moduleEigengenes(EEG, modules_sub, excludeGrey = T)
+  
+  module_signals = signals_all$eigengenes
+  
+  var = rowMeans(signals_all$varExplained)
+  variances[n] = var
+  n = n + 1
+  rm(signals_all)
+  
+  #get signals that were not assigned to any module (we'll keep them as well)
+  no_module = EEG[,modules_sub==0]
+  
+  df_reduced = cbind(module_signals,no_module,labs)
+  
+  save_to = paste0("data/reduced/",sub_name,".RData")
+  save(df_reduced, file = save_to)
+}
+```
+
+## Add names of modules
+```{r}
+files = list.files("data/merged", full.names = T)
+files = files[c(2,5,11)]
+
+modules = read.csv("data/modules.csv")[,-1]
+modules = modules[,c(2,5,11)]
+
+#get channel names
+df  = read.csv(files[1])
+channels = colnames(df)[1:32]
+rm(df)
+
+modules$channel = channels
+rownames(modules) = channels
+#subject 10
+sub10  = modules[,c(1,4)]
+sub10$colors = labels2colors(sub10$Subject10)
+names = as.factor(sub10$Subject10)
+sub10[order(sub10$Subject10),]
+
+levels(names) = c("0", "Centre_1", "Occipital_2", "Left_3", "FrontalLeft_4", "FrontalRight_5", "CentrePost_6")
+names_10 = levels(names)
+
+#subject 2
+sub2  = modules[,c(2,4)]
+sub2$colors = labels2colors(sub2$Subject2)
+names = as.factor(sub2$Subject2)
+sub2[order(sub2$Subject2),]
+
+levels(names) = c("0", "CentreRight_1", "¨PosteriorLeft_2", "Occipital_3", "CentreLeft_4", "PosteriorRight_5", "FrontalLeft_6", "FFrontal7","FrontalLeft_8")
+
+names_2 = levels(names)
+
+#subject 8
+sub8  = modules[,c(3,4)]
+sub8$colors = labels2colors(sub8$Subject8)
+names = as.factor(sub8$Subject8)
+sub8[order(sub8$Subject8),]
+
+levels(names) = c("0", "CentrePRight_1", "CentrePLeft_2", "Occipital_3", "PosteriorLeft_4", "CentreRight_5", "FrontalRight_6", "FrontalLeft_7", "TemporalLeft_8","FFrontal_9")
+names_8 = levels(names)
+
+#create list of names
+module_names = list(names_10,names_2,names_8)
+names(module_names) = c("Subject10","Subject2","Subject8")
+```
+
+
+
+```{r}
+files = list.files("data/merged", full.names = T)
+files = files[c(2,5,11)]
+modules = read.csv("data/modules.csv")[,-1]
+variances = rep(NA,length(files))
+n = 1
+for (f in files) {
+  df = read.csv(f)
+  df = preprocess(df)
+  EEG = df[,1:32]
+  labs = df[,33:40]
+  rm(df)
+  
+  sub_name = gsub(".csv","",strsplit(f,"/")[[1]][3])
+  print(sub_name)
+
+  modules_sub = modules[,sub_name]
+  signals_all = moduleEigengenes(EEG, modules_sub, excludeGrey = T)
+  
+  module_signals = signals_all$eigengenes
+  colnames(module_signals) = module_names[sub_name][[1]][-1]
+  print(colnames(module_signals))
+  
+  var = rowMeans(signals_all$varExplained)
+  variances[n] = var
+  n = n + 1
+  rm(signals_all)
+  
+  #get signals that were not assigned to any module (we'll keep them as well)
+  no_module = EEG[,modules_sub==0]
+  
+  df_reduced = cbind(module_signals,no_module,labs)
+  
+  save_to = paste0("data/reduced/",sub_name,".RData")
+  save(df_reduced, file = save_to)
+}
+```
+
