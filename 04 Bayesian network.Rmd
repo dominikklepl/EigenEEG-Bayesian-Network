@@ -1,0 +1,236 @@
+---
+title: "04 Bayesian network - structure learning"
+author: "Dominik Klepl"
+date: "4/24/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(bnlearn)
+library(tidyr)
+library(ggplot2)
+library(ggthemes)
+```
+
+## Subject 10
+```{r}
+load("data/reduced/Subject10.RData")
+
+df = df_reduced
+rm(df_reduced)
+df = df[,-15]
+
+#standardize
+df[,1:6] = lapply(df[,1:6], function(x) scale(x))
+
+X_train = df[,1:8]
+Y_train = df[,9:14]
+```
+
+Inspect distributions
+```{r}
+dist_10 = X_train %>% gather()
+
+distribution_S10 = ggplot(dist_10, aes(value)) + 
+  geom_density() + 
+  stat_function(fun = dnorm, args = list(mean = mean(dist_10$value), sd = sd(dist_10$value)),color="blue")+
+  facet_wrap(~key, scales = 'free_x', nrow = 2)+
+  theme_few()+
+  labs(title = "Subject 2")+
+  theme(plot.title = element_text(hjust = 0.5))
+ggsave("figures/Distribution_S10.png", distribution_S10)
+
+distribution_S10
+```
+
+
+Using Bootstrap, learn the best model structure for each movement class
+```{r}
+
+#plot(strength_HS_10)
+#dag = averaged.network(strength_HS_10)
+#strength.plot(dag, strength_HS_10, shape = "ellipse")
+
+sub10_strengths = list()
+for (i in 1:ncol(Y_train)) {
+  print(i)
+  labels = as.factor(Y_train[,i])
+  data = caret::downSample(x = X_train, y = labels, yname = "Activity")
+  data$Activity = as.numeric(as.character(data$Activity))
+  print("Starting")
+  strength = boot.strength(data=data, algorithm = "hc", R = 30)
+  name = paste0(colnames(Y_train)[i])
+  sub10_strengths[[i]] = strength
+  names(sub10_strengths)[i] = name
+}
+
+save(sub10_strengths,file = "networks/Arc_strength_Sub10.RData")
+```
+
+## Subject 2
+```{r}
+load("data/reduced/Subject2.RData")
+
+df = df_reduced
+rm(df_reduced)
+df = df[,-20]
+
+#standardize
+df[,1:8] = lapply(df[,1:8], function(x) scale(x))
+
+X_train = df[,1:13]
+Y_train = df[,14:19]
+```
+
+Inspect distributions
+```{r}
+dist_2 = X_train%>% gather()
+
+distribution_S2 = ggplot(dist_2, aes(value)) + 
+  geom_density() + 
+  stat_function(fun = dnorm, args = list(mean = mean(dist_2$value), sd = sd(dist_2$value)),color="blue")+
+  facet_wrap(~key, scales = 'free_x')+
+  theme_few()+
+  labs(title = "Subject 2")+
+  theme(plot.title = element_text(hjust = 0.5))
+ggsave("figures/Distribution_S2.png", distribution_S2)
+
+distribution_S2
+```
+
+Using Bootstrap, learn the best model structure for each movement class
+```{r}
+sub2_strengths = list()
+for (i in 3:6) {
+  print(i)
+  labels = as.factor(Y_train[,i])
+  data = caret::downSample(x = X_train, y = labels, yname = "Activity")
+  data$Activity = as.numeric(as.character(data$Activity))
+  print("Starting")
+  strength = boot.strength(data=data, algorithm = "hc", R = 30)
+  print("Finished")
+  name = paste0(colnames(Y_train)[i])
+  sub2_strengths[[i]] = strength
+  names(sub2_strengths)[i] = name
+}
+
+save(sub2_strengths,file = "networks/Arc_strength_Sub2.RData")
+
+# plot(sub2_strengths[[6]])
+# 
+# dag = averaged.network(sub2_strengths[[6]])
+# strength.plot(dag, sub2_strengths[[6]], shape = "ellipse")
+```
+
+# Subject 8
+```{r}
+load("data/reduced/Subject8.RData")
+
+df = df_reduced
+rm(df_reduced)
+df = df[,-19]
+
+#standardize
+df[,1:9] = lapply(df[,1:9], function(x) scale(x))
+
+X_train = df[,1:12]
+Y_train = df[,13:18]
+```
+
+Inspect distributions
+```{r}
+dist_8 = X_train %>% gather()
+
+distribution_S8 = ggplot(dist_8, aes(value)) + 
+  geom_density() + 
+  stat_function(fun = dnorm, args = list(mean = mean(dist_8$value), sd = sd(dist_8$value)),color="blue")+
+  facet_wrap(~key, scales = 'free_x')+
+  theme_few()+
+  labs(title = "Subject 8")+
+  theme(plot.title = element_text(hjust = 0.5))
+ggsave("figures/Distribution_S8.png", distribution_S8)
+
+distribution_S8
+```
+
+Using Bootstrap, learn the best model structure for each movement class
+```{r}
+sub8_strengths = list()
+for (i in 1:ncol(Y_train)) {
+  print(i)
+  labels = as.factor(Y_train[,i])
+  data = caret::downSample(x = X_train, y = labels, yname = "Activity")
+  print("Starting")
+  data$Activity = as.numeric(as.character(data$Activity))
+  strength = boot.strength(data=data, algorithm = "hc", R = 30)
+  print("Finished")
+  
+  name = paste0(colnames(Y_train)[i])
+  sub8_strengths[[i]] = strength
+  names(sub8_strengths)[i] = name
+}
+
+save(sub8_strengths,file = "networks/Arc_strength_Sub8.RData")
+
+```
+
+```{r}
+# plot(sub8_strengths$HandStart)
+# 
+# nrow(sub8_strengths$HandStart[sub8_strengths$HandStart$strength > attr(sub8_strengths$HandStart, "threshold") &sub8_strengths$HandStart$direction > 0.5, ])
+# nrow(sub8_strengths$HandStart[sub8_strengths$HandStart$strength > 0.99 &sub8_strengths$HandStart$direction > 0.5, ])
+# 
+# dag = averaged.network(sub8_strengths$HandStart, threshold = 0.99)
+# (dag, shape = "ellipse")
+# 
+# undirected.arcs(dag)
+# dag = drop.arc(dag, from="CentrePLeft_2", to="PosteriorLeft_4")
+# dag = drop.arc(dag, from="PosteriorLeft_4", to="CentrePLeft_2")
+# 
+# 
+# fit = bn.cv(data,bn = "hc", k = 2,loss = "cor-lw", loss.args = list(target = "Activity"), )
+# 
+# tt = table(unlist(sapply(fit[[1]], '[[', "observed")),
+#            unlist(sapply(fit[[1]], '[[', "predicted")) > 0.50)
+# 
+# obs = fit[[1]]$observed
+# pred = fit[[1]]$predicted
+# 
+# MLmetrics::AUC(pred,obs)
+# 
+# obs = fit[[2]]$observed
+# pred = fit[[2]]$predicted
+# 
+# MLmetrics::AUC(pred,obs)
+# 
+# 
+# t = fit[[1]]$fitted
+# p = fit[[2]]$fitted
+# 
+# graphviz.plot(p, shape = "ellipse")
+# graphviz.plot(t, shape = "ellipse")
+```
+
+# Parameter learning
+## Subject 10
+```{r}
+load("networks/Arc_strength_Sub10.RData")
+load()
+strength = sub10_strengths
+
+networks_10 = list()
+```
+
+Handstart
+```{r}
+HS_str = strength$HandStart
+nrow(HS_str[HS_str$strength > attr(HS_str, "threshold") &HS_str$direction > 0.5, ])
+nrow(HS_str[HS_str$strength > 0.9 &HS_str$direction > 0.5, ])
+
+HS_avg = averaged.network(HS_str, threshold = 0.9)
+strength.plot(HS_avg, HS_str, shape = "ellipse")
+graphviz.plot(HS_avg, shape="ellipse")
+
+HS_fit = bn.cv()
+```
+

@@ -146,7 +146,7 @@ Put all preprocessing into a function
 ```{r}
 preprocess = function(data, sampling = 500, resample = F, new_sampling = 200) {
   data[,1:32] = lapply(data[,1:32], function(x) 1e-6*x)
-  #data[,1:32]= eegfilter(data[,1:32], sampling, lower = 5, upper = 30, method = "butter", order = 5, forwardreverse = F)
+  data[,1:32]= eegfilter(data[,1:32], sampling, lower = 5, upper = 30, method = "butter", order = 5, forwardreverse = F)
   if (resample){
     down = sampling/new_sampling
     data = as.data.frame(eegresample(data,round(nrow(data)/down,0)))
@@ -159,48 +159,67 @@ preprocess = function(data, sampling = 500, resample = F, new_sampling = 200) {
 ```
 
 ## Run Linear models for all subjects
+
 ```{r}
+makeFolds = function(data) {
+  folds = list()
+  for (i in unique(data$Series)){
+    f = rownames(data[data$Series==i,])
+    f = as.integer(f)
+    name = paste0("Fold",i)
+    folds[[name]] = f
+  }
+  return(folds)
+}
+```
+
+```{r}
+library(caret)
+library(dplyr)
+library(eegkit)
 files = list.files("data/merged", full.names = T)
+files = files[c(2,5,11)]
 
 EEG_cols = c(1:32,40)
 lab_cols = 33:38
 n=1
-AUCs = rep(NA,length(files))
-for (f in files) {
+scores = list()
+for (f in files[-1]) {
   df = read.csv(f)
   df = preprocess(df)
   
-  mean_auc = rep(NA,length(lab_cols))
+  mean = rep(NA,length(lab_cols))
+  sd = rep(NA,length(lab_cols))
   for (i in 1:length(lab_cols)) {
     df_rest = df[,c(EEG_cols,lab_cols[i])]
     colnames(df_rest)[34]="Response"
     df_rest$Response = as.factor(df_rest$Response)
-    
+    set.seed(1710)
     df_rest = caret::downSample(x=df_rest[,1:33],y=df_rest$Response, yname = "Response")
+    levels(df_rest$Response) = c("Null","Response")
+    #folds = makeFolds(df_rest)
     
-    train = df_rest[df_rest$Series<=6,]
-    test = df_rest[df_rest$Series>6,]
+    ctrl = trainControl(method="cv",
+                        index = groupKFold(df_rest$Series, 4),
+                        classProbs = T, savePredictions = "final")
+    m = train(Response ~., data = df_rest,
+              method = "glm", trControl = ctrl)
     
-    train = train[,-33]
-    test = test[,-33]
-    
-    m1 = glm(Response ~ ., family = "binomial", data=train)
-    summary(m1)
-    
-    preds = predict(m1, newdata = test, type = "response")
-    auc = MLmetrics::AUC(preds,test$Response)
-    mean_auc[i] = auc
-    cat("\n",colnames(df)[lab_cols[i]],":",auc)
+    pr = m$pred
+    pr$pred = ifelse(pr$pred=="Null",0,1)
+    pr$obs = ifelse(pr$obs=="Null",0,1)
+    pr = pr[,c(2,3,7)]
+    pr = pr %>% group_by(Resample) %>% summarise(F1 = MLmetrics::F1_Score(obs, pred))
+
+    mean[i] = mean(pr$F1)
+    sd[i] = sd(pr$F1)
+    cat("\n",colnames(df)[lab_cols[i]],":",mean[i])
   }
   
-  m = mean(mean_auc)
-  AUCs[n] = m
-  n = n + 1
+  res = data.frame(mean = mean, sd = sd)
+  scores[[strsplit(f,"/")[[1]][3]]] = res
 }
 
-AUC_overall = data.frame(ID = 1:length(files),
-                         AUC = AUCs)
-
-readr::write_csv(AUC_overall,"results/Baseline_results.csv")
+save(scores,file = "results/Baseline_results.RData")
 ```
 

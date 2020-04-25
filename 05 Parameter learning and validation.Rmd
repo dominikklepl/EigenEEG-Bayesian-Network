@@ -1,0 +1,246 @@
+---
+title: "05 Parameter learning and validation"
+author: "Dominik Klepl"
+date: "4/25/2020"
+output: html_document
+---
+
+```{r}
+library(bnlearn)
+
+results_bn = list()
+```
+
+Function for creating folds
+```{r}
+makeFolds = function(data) {
+  folds = list()
+  for (i in unique(data$Series)){
+    f = rownames(data[data$Series==i,])
+    f = as.integer(f)
+    name = paste0("Fold",i)
+    folds[[name]] = f
+  }
+  return(folds)
+}
+```
+
+## Subject 10
+```{r}
+load("networks/Arc_strength_Sub10.RData")
+strength = sub10_strengths
+
+
+load("data/reduced/Subject10.RData")
+df = df_reduced
+rm(df_reduced)
+df = df[,-15]
+#standardize
+df[,1:6] = lapply(df[,1:6], function(x) scale(x))
+X_train = df[,c(1:8,15)]
+Y_train = df[,9:14]
+```
+
+Cross-validate
+```{r}
+thresholds = c(0.9,0.9,0.9,0.9,0.9,0.999)
+mean_sub = rep(NA, 6)
+sd_sub = rep(NA, 6)
+subject_nets = list()
+for (i in 1:ncol(Y_train)) {
+  print(i)
+  components = list()
+  set.seed(1710)
+  data = caret::downSample(X_train, as.factor(Y_train[,i]), yname = "Activity")
+  data$Activity = as.numeric(as.character(data$Activity))
+  
+  folds = makeFolds(data)
+  data = data[,-(ncol(data)-1)]
+  
+  str = strength[[i]]
+  print(attr(str, "threshold"))
+  print(nrow(str[str$strength > attr(str, "threshold") &str$direction > 0.5, ]))
+  print(nrow(str[str$strength > 0.7 &str$direction > 0.5, ]))
+  print(nrow(str[str$strength > 0.9 &str$direction > 0.5, ]))
+  print(nrow(str[str$strength > 0.999 &str$direction > 0.5, ]))
+  
+  threshold = thresholds[i]
+  
+  avg_net = averaged.network(str, threshold = threshold)
+  avg_net = cextend(avg_net)
+  
+  components[["DAG"]] = avg_net
+  
+  cv_net = bn.cv(data, bn = avg_net, folds = folds, loss = "cor-lw", loss.args = list(target = "Activity", n = 500))
+  
+  components[["CV"]] = cv_net
+  
+  scores = rep(NA,length(cv_net))
+  for (n in 1:length(cv_net)) {
+    pr = as.numeric(cv_net[[n]]$predicted > 0.5)
+    ob = cv_net[[n]]$observed
+    scores[n] = MLmetrics::F1_Score(ob,pr)
+  }
+  
+  mean_sub[i] = mean(scores)
+  sd_sub[i] = sd(scores)
+  
+  full_net = bn.fit(avg_net, data)
+  
+  components[["Full"]] = full_net
+  
+  subject_nets[[colnames(Y_train)[i]]] = components
+}
+
+score_sub = data.frame(mean = mean_sub, sd = sd_sub, class = colnames(Y_train))
+
+results_bn[["Subject10"]] = score_sub
+```
+
+## Subject 2
+```{r}
+load("networks/Arc_strength_Sub2.RData")
+strength = sub2_strengths
+
+load("data/reduced/Subject2.RData")
+df = df_reduced
+rm(df_reduced)
+df = df[,-20]
+#standardize
+df[,1:8] = lapply(df[,1:8], function(x) scale(x))
+X_train = df[,c(1:13,20)]
+Y_train = df[,14:19]
+```
+
+Cross-validate
+```{r}
+mean_sub = rep(NA, 6)
+sd_sub = rep(NA, 6)
+subject_nets = list()
+thresholds = c(0.999, 0.999, 0.999, 0.999, 0.999, 0.999)
+for (i in 1:ncol(Y_train)) {
+  print(i)
+  components = list()
+  set.seed(1710)
+  data = caret::downSample(X_train, as.factor(Y_train[,i]), yname = "Activity")
+  data$Activity = as.numeric(as.character(data$Activity))
+  
+  folds = makeFolds(data)
+  data = data[,-(ncol(data)-1)]
+  
+  str = strength[[i]]
+  print(attr(str, "threshold"))
+  print(nrow(str[str$strength > attr(str, "threshold") &str$direction > 0.5, ]))
+  print(nrow(str[str$strength > 0.7 &str$direction > 0.5, ]))
+  print(nrow(str[str$strength > 0.9 &str$direction > 0.5, ]))
+  print(nrow(str[str$strength > 0.999 &str$direction > 0.5, ]))
+  
+  threshold = thresholds[i]
+  
+  avg_net = averaged.network(str, threshold = threshold)
+  avg_net = cextend(avg_net)
+   
+  components[["DAG"]] = avg_net
+  
+  cv_net = bn.cv(data, bn = avg_net, folds = folds, loss = "cor-lw", loss.args = list(target = "Activity", n = 500))
+
+  components[["CV"]] = cv_net
+
+  scores = rep(NA,length(cv_net))
+  for (n in 1:length(cv_net)) {
+    pr = as.numeric(cv_net[[n]]$predicted > 0.5)
+    ob = cv_net[[n]]$observed
+    scores[n] = MLmetrics::F1_Score(ob,pr)
+  }
+
+  mean_sub[i] = mean(scores)
+  sd_sub[i] = sd(scores)
+
+  full_net = bn.fit(avg_net, data)
+
+  components[["Full"]] = full_net
+
+  subject_nets[[colnames(Y_train)[i]]] = components
+}
+
+score_sub = data.frame(mean = mean_sub, sd = sd_sub, class = colnames(Y_train))
+
+results_bn[["Subject2"]] = score_sub
+```
+
+## Subject 8
+```{r}
+load("networks/Arc_strength_Sub8.RData")
+strength = sub8_strengths
+
+load("data/reduced/Subject8.RData")
+df = df_reduced
+rm(df_reduced)
+df = df[,-19]
+#standardize
+df[,1:9] = lapply(df[,1:9], function(x) scale(x))
+X_train = df[,c(1:12,19)]
+Y_train = df[,13:18]
+```
+
+Cross-validate
+```{r}
+mean_sub = rep(NA, 6)
+sd_sub = rep(NA, 6)
+subject_nets = list()
+thresholds = c(0.999, 0.999, 0.999, 0.999, 0.999, 0.999)
+for (i in 1:ncol(Y_train)) {
+  print(i)
+  components = list()
+  set.seed(1710)
+  data = caret::downSample(X_train, as.factor(Y_train[,i]), yname = "Activity")
+  data$Activity = as.numeric(as.character(data$Activity))
+  
+  folds = makeFolds(data)
+  data = data[,-(ncol(data)-1)]
+  
+  str = strength[[i]]
+  print(attr(str, "threshold"))
+  print(nrow(str[str$strength > attr(str, "threshold") &str$direction > 0.5, ]))
+  print(nrow(str[str$strength > 0.7 &str$direction > 0.5, ]))
+  print(nrow(str[str$strength > 0.9 &str$direction > 0.5, ]))
+  print(nrow(str[str$strength > 0.999 &str$direction > 0.5, ]))
+  
+  threshold = thresholds[i]
+
+  avg_net = averaged.network(str, threshold = threshold)
+  avg_net = cextend(avg_net)
+
+  components[["DAG"]] = avg_net
+
+  cv_net = bn.cv(data, bn = avg_net, folds = folds, loss = "cor-lw", loss.args = list(target = "Activity", n = 500))
+
+  components[["CV"]] = cv_net
+
+  scores = rep(NA,length(cv_net))
+  for (n in 1:length(cv_net)) {
+    pr = as.numeric(cv_net[[n]]$predicted > 0.5)
+    ob = cv_net[[n]]$observed
+    scores[n] = MLmetrics::F1_Score(ob,pr)
+  }
+
+  mean_sub[i] = mean(scores)
+  sd_sub[i] = sd(scores)
+
+  full_net = bn.fit(avg_net, data)
+
+  components[["Full"]] = full_net
+
+  subject_nets[[colnames(Y_train)[i]]] = components
+}
+
+score_sub = data.frame(mean = mean_sub, sd = sd_sub, class = colnames(Y_train))
+
+results_bn[["Subject8"]] = score_sub
+```
+
+Save results
+```{r}
+save(results_bn, file = "results/BN_results.RData")
+```
+
