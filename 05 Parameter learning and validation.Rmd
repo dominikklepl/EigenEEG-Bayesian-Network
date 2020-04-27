@@ -95,6 +95,8 @@ for (i in 1:ncol(Y_train)) {
 score_sub = data.frame(mean = mean_sub, sd = sd_sub, class = colnames(Y_train))
 
 results_bn[["Subject10"]] = score_sub
+
+save(subject_nets, file = "networks/Subject10.RData")
 ```
 
 ## Subject 2
@@ -166,6 +168,7 @@ for (i in 1:ncol(Y_train)) {
 score_sub = data.frame(mean = mean_sub, sd = sd_sub, class = colnames(Y_train))
 
 results_bn[["Subject2"]] = score_sub
+save(subject_nets, file = "networks/Subject2.RData")
 ```
 
 ## Subject 8
@@ -209,6 +212,11 @@ for (i in 1:ncol(Y_train)) {
   threshold = thresholds[i]
 
   avg_net = averaged.network(str, threshold = threshold)
+  # 
+  # un = undirected.arcs(avg_net)
+  # for (s in 1:6){
+  #   avg_net = drop.arc(avg_net, from = un[[s,1]], to = un[[s,2]])
+  # }
   avg_net = cextend(avg_net)
 
   components[["DAG"]] = avg_net
@@ -237,10 +245,61 @@ for (i in 1:ncol(Y_train)) {
 score_sub = data.frame(mean = mean_sub, sd = sd_sub, class = colnames(Y_train))
 
 results_bn[["Subject8"]] = score_sub
+save(subject_nets, file = "networks/Subject8.RData")
 ```
 
 Save results
 ```{r}
 save(results_bn, file = "results/BN_results.RData")
 ```
+
+## Plot results
+```{r}
+library(ggplot2)
+library(ggthemes)
+library(dplyr)
+library(patchwork)
+
+load("results/BN_results.RData")
+load("results/Baseline_results.RData")
+results_base = scores
+rm(scores)
+```
+
+### Subject 10
+```{r}
+subjects = c("Subject10","Subject2","Subject8")
+plots = list()
+
+for (i in 1:3) {
+  bn = results_bn[[i]]
+  bn$Model = "Bayesian network"
+  
+  base = results_base[[i]]
+  base$class = bn$class
+  base$Model = "Baseline"
+  
+  plot_df = rbind(bn,base)
+  
+  plot = plot_df %>%
+    mutate(class = factor(class, levels=c("HandStart","FirstDigitTouch","BothStartLoadPhase","LiftOff","Replace", "BothReleased"))) %>%
+    ggplot(aes(x = class, y = mean, fill=Model))+
+    geom_col(position="dodge")+
+    geom_errorbar(aes(ymin = mean-sd, ymax = mean+sd), position=position_dodge(.9), width = 0.5)+
+    theme_few()+
+    scale_fill_tableau()+
+    labs(x = "",
+         y = "F1",
+         title = subjects[i])+
+    theme(plot.title = element_text(hjust = 0.5),
+          axis.text.x = element_text(angle = 30, hjust = 1))
+  
+  plots[[subjects[i]]] = plot
+}
+
+result_plot = (plots$Subject10+guides(fill=F)) + (plots$Subject2+theme(legend.position = "bottom")) + (plots$Subject8+guides(fill=F))
+
+ggsave("figures/Results.png", result_plot, width = 7, height = 5)
+```
+
 

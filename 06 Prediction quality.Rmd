@@ -1,0 +1,273 @@
+---
+title: "Prediction quality over time"
+author: "Dominik Klepl"
+date: "4/25/2020"
+output: html_document
+---
+
+```{r}
+library(bnlearn)
+library(lmerTest)
+library(merTools)
+library(ggplot2)
+library(ggthemes)
+library(dplyr)
+```
+
+# Subject 10
+```{r}
+load("data/reduced/Subject10.RData")
+df = df_reduced
+rm(df_reduced)
+df = df[,-15]
+
+df[,1:6] = lapply(df[,1:6], function(x) scale(x))
+X = df[,1:8]
+Y = df[,9:14]
+
+#load fully fitted network
+load("networks/Subject10.RData")
+```
+
+Tag samples with time since start of event
+```{r}
+all_preds = data.frame()
+
+for (i in 1:6) {
+  print(colnames(Y)[i])
+  data = cbind(X, Y[,i])
+  colnames(data)[9] = "Activity"
+  data$Activity = as.numeric(data$Activity)
+  events_n = sum(rle(data$Activity)$values==1)
+  
+  data = data[data$Activity==1,]
+  
+  net = subject_nets[[i]][[3]]
+  prediction = predict(object = net, node = "Activity", method = "bayes-lw", data = data)
+  
+  p = ifelse(prediction>0.5,1,0)
+  
+  pred_df = data.frame(predicted = p,
+                       observed = data$Activity)
+  
+  pred_df$Time = rep(0,nrow(pred_df))
+  pred_df[pred_df[,2]==1,3] = rep(1:150,events_n)
+  
+  pred_df = pred_df %>% 
+    group_by(Time) %>%
+    summarize(mean = mean(predicted),
+              sd = sd(predicted))
+  pred_df$Class = colnames(Y)[i]
+  
+  all_preds = rbind(all_preds, pred_df)
+}
+
+save(all_preds, file = "results/PredictionProb_10.RData")
+```
+
+```{r}
+(sub10_plot = all_preds %>%
+  mutate(Class = factor(Class, levels=c("HandStart","FirstDigitTouch","BothStartLoadPhase","LiftOff","Replace", "BothReleased"))) %>%
+  ggplot(aes(x = Time, y = mean, color=Class))+
+    geom_line()+
+    geom_smooth(method="loess", formula=y~x)+
+    theme_few()+
+    scale_color_tableau()+
+    facet_wrap(~Class)+
+    labs(y = "P(correct)"))
+
+ggsave("figures/PredProb_S10.png", sub10_plot, width = 7, height = 4)
+```
+
+# Subject 2
+```{r}
+load("data/reduced/Subject2.RData")
+df = df_reduced
+rm(df_reduced)
+df = df[,-20]
+
+df[,1:8] = lapply(df[,1:8], function(x) scale(x))
+X = df[,1:13]
+Y = df[,14:19]
+
+#load fully fitted network
+load("networks/Subject2.RData")
+```
+
+Tag samples with time since start of event
+```{r}
+all_preds = data.frame()
+
+for (i in 1:6) {
+  print(colnames(Y)[i])
+  data = cbind(X, Y[,i])
+  colnames(data)[14] = "Activity"
+  data$Activity = as.numeric(data$Activity)
+  events_n = sum(rle(data$Activity)$values==1)
+  
+  data = data[data$Activity==1,]
+  
+  net = subject_nets[[i]][[3]]
+  prediction = predict(object = net, node = "Activity", method = "bayes-lw", data = data)
+  
+  p = ifelse(prediction>0.5,1,0)
+  
+  pred_df = data.frame(predicted = p,
+                       observed = data$Activity)
+  
+  pred_df$Time = rep(0,nrow(pred_df))
+  pred_df[pred_df[,2]==1,3] = rep(1:150,events_n)
+  
+  pred_df = pred_df %>% 
+    group_by(Time) %>%
+    summarize(mean = mean(predicted),
+              sd = sd(predicted))
+  pred_df$Class = colnames(Y)[i]
+  
+  all_preds = rbind(all_preds, pred_df)
+}
+
+save(all_preds, file = "results/PredictionProb_2.RData")
+```
+
+```{r}
+(sub2_plot = all_preds %>%
+  mutate(Class = factor(Class, levels=c("HandStart","FirstDigitTouch","BothStartLoadPhase","LiftOff","Replace", "BothReleased"))) %>%
+  ggplot(aes(x = Time, y = mean, color=Class))+
+    geom_line()+
+    geom_smooth(method="loess", formula=y~x)+
+    theme_few()+
+    scale_color_tableau()+
+    facet_wrap(~Class))
+
+ggsave("figures/PredProb_S02.png", sub2_plot, width = 7, height = 4)
+```
+
+# Subject 8
+```{r}
+load("data/reduced/Subject8.RData")
+df = df_reduced
+rm(df_reduced)
+df = df[,-19]
+
+df[,1:9] = lapply(df[,1:9], function(x) scale(x))
+X = df[,1:12]
+Y = df[,13:18]
+
+#load fully fitted network
+load("networks/Subject8.RData")
+```
+
+Tag samples with time since start of event
+```{r}
+all_preds = data.frame()
+
+for (i in 1:6) {
+  print(colnames(Y)[i])
+  data = cbind(X, Y[,i])
+  colnames(data)[13] = "Activity"
+  data$Activity = as.numeric(data$Activity)
+  events_n = sum(rle(data$Activity)$values==1)
+  
+  data = data[data$Activity==1,]
+  
+  net = subject_nets[[i]][[3]]
+  prediction = predict(object = net, node = "Activity", method = "bayes-lw", data = data)
+  
+  p = ifelse(prediction>0.5,1,0)
+  
+  pred_df = data.frame(predicted = p,
+                       observed = data$Activity)
+  
+  pred_df$Time = rep(0,nrow(pred_df))
+  pred_df[pred_df[,2]==1,3] = rep(1:150,events_n)
+  
+  pred_df = pred_df %>% 
+    group_by(Time) %>%
+    summarize(mean = mean(predicted),
+              sd = sd(predicted))
+  pred_df$Class = colnames(Y)[i]
+  
+  all_preds = rbind(all_preds, pred_df)
+}
+
+save(all_preds, file = "results/PredictionProb_8.RData")
+```
+
+```{r}
+(sub8_plot = all_preds %>%
+  mutate(Class = factor(Class, levels=c("HandStart","FirstDigitTouch","BothStartLoadPhase","LiftOff","Replace", "BothReleased"))) %>%
+  ggplot(aes(x = Time, y = mean, color=Class))+
+    geom_line()+
+    geom_smooth(method="loess", formula=y~x)+
+    theme_few()+
+    scale_color_tableau()+
+    facet_wrap(~Class))
+
+ggsave("figures/PredProb_S08.png", sub8_plot, width = 7, height = 4)
+```
+
+```{r}
+load("results/PredictionProb_8.RData")
+df_8 = all_preds
+df_8$ID = 8
+
+load("results/PredictionProb_10.RData")
+df_10 = all_preds
+df_10$ID = 10
+
+load("results/PredictionProb_2.RData")
+df_2 = all_preds
+df_2$ID = 2
+
+df = rbind(df_8, df_10, df_2)
+df_long = df
+
+df = df %>% 
+  group_by(Time,Class) %>%
+  summarise(mean = mean(mean))
+```
+
+```{r}
+(plot = df %>%
+  mutate(Class = factor(Class, levels=c("HandStart","FirstDigitTouch","BothStartLoadPhase","LiftOff","Replace", "BothReleased"))) %>%
+  ggplot(aes(x = Time, y = mean, color=Class))+
+    geom_line()+
+    geom_smooth(method="loess", formula=y~x)+
+    theme_few()+
+    scale_color_tableau()+
+    facet_wrap(~Class)+
+    labs(y = "P(correct)"))
+
+ggsave("figures/PredProb_all.png", plot, width = 7, height = 4)
+```
+
+Formal models
+```{r}
+library(lmerTest)
+df_long$Time = scale(df_long$Time)
+m1 = lmer(mean ~ Time + (1|ID), df_long)
+m2 = lmer(mean ~ poly(Time,2) + (1|ID), df_long)
+m3 = lmer(mean ~ poly(Time,2)*Class + (1|ID), df_long)
+m4 = lmer(mean ~ +poly(Time,2)*Class + (Time|ID), df_long)
+
+#compare the models
+BIC(m1,m2,m3,m4)
+summary(m4)
+
+MuMIn::r.squaredGLMM(m4)
+```
+
+Test Handstart alone
+```{r}
+HS = df_long[df_long$Class=="HandStart",]
+hs1 = lmer(mean ~ Time + (1|ID), HS)
+hs2 = lmer(mean ~ poly(Time,2) + (1|ID), HS)
+hs3 = lmer(mean ~ poly(Time,3) + (1|ID), HS)
+
+BIC(hs1,hs2,hs3)
+
+summary(hs3)
+MuMIn::r.squaredGLMM(hs3)
+```
+
