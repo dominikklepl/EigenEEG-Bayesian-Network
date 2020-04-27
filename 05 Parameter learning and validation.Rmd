@@ -302,4 +302,41 @@ result_plot = (plots$Subject10+guides(fill=F)) + (plots$Subject2+theme(legend.po
 ggsave("figures/Results.png", result_plot, width = 7, height = 5)
 ```
 
+Plot networks
+```{r}
+library(bnlearn)
+load("networks/Subject10.RData")
+names = names(subject_nets)
+for (i in 1:6){
+  net = subject_nets[[i]][[1]]
+  filename = paste0("figures/nets/Sub10_",names[i],".png")
+  
+  png(filename)
+  graphviz.plot(net, shape = "ellipse")
+  dev.off()
+}
+
+load("networks/Subject2.RData")
+names = names(subject_nets)
+for (i in 1:6){
+  net = subject_nets[[i]][[1]]
+  filename = paste0("figures/nets/Sub02_",names[i],".png")
+  
+  png(filename)
+  graphviz.plot(net, shape = "ellipse")
+  dev.off()
+}
+
+load("networks/Subject8.RData")
+names = names(subject_nets)
+for (i in 1:6){
+  net = subject_nets[[i]][[1]]
+  filename = paste0("figures/nets/Sub08_",names[i],".png")
+  
+  png(filename)
+  graphviz.plot(net, shape = "ellipse")
+  dev.off()
+}
+```
+
 
