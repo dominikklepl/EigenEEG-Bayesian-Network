@@ -146,7 +146,7 @@ Put all preprocessing into a function
 ```{r}
 preprocess = function(data, sampling = 500, resample = F, new_sampling = 200) {
   data[,1:32] = lapply(data[,1:32], function(x) 1e-6*x)
-  data[,1:32]= eegfilter(data[,1:32], sampling, lower = 5, upper = 30, method = "butter", order = 5, forwardreverse = F)
+  data[,1:32]= eegfilter(data[,1:32], sampling, lower = 7, upper = 30, method = "butter", order = 5, forwardreverse = F)
   if (resample){
     down = sampling/new_sampling
     data = as.data.frame(eegresample(data,round(nrow(data)/down,0)))
